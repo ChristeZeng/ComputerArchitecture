@@ -122,8 +122,8 @@ Riscv架构上定义的异常是不可屏蔽的，但狭义上的中断是可以
 
 \begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
     \centering %图片居中
-    \includegraphics[width=1.0\textwidth]{figs/mip\_mie.png} %插入图片，[]中设置图片大小，{}中是图片文件名
-    \caption{mip\_mie} %最终文档中希望显示的图片标题
+    \includegraphics[width=1.0\textwidth]{figs/mipmie.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+    \caption{mipmie} %最终文档中希望显示的图片标题
     \label{Fig.9} %用于文内引用的标签
 \end{figure}
 
@@ -159,156 +159,118 @@ Riscv架构上定义的异常是不可屏蔽的，但狭义上的中断是可以
 `timescale 1ns / 1ps
 
 module ExceptionUnit(
-    input clk, rst,
-    input csr_rw_in,                
-    input[1:0] csr_wsc_mode_in, 
-    input csr_w_imm_mux,
-    input[11:0] csr_rw_addr_in,
-    input[31:0] csr_w_data_reg,
-    input[4:0] csr_w_data_imm,
-    input[31:0] fault_addr,
-    input isZero,
-    output[31:0] csr_r_data_out,
-
-    input interrupt,            
-    input illegal_inst,         
-    input l_access_fault,
-    input s_access_fault,
-    input ecall_m,
-
-    input mret, 
-
-    input[31:0] epc_cur,        
-    input[31:0] epc_next,       
-    output[31:0] PC_redirect,
-    output redirect_mux,
-
-    output reg_FD_flush, reg_DE_flush, reg_EM_flush, reg_MW_flush, 
-    output RegWrite_cancel
+	input clk, rst,
+	input csr_rw_in,
+	input[1:0] csr_wsc_mode_in,
+	input csr_w_imm_mux,
+	input[11:0] csr_rw_addr_in,
+	input[31:0] csr_w_data_reg,
+	input[4:0] csr_w_data_imm,
+	output[31:0] csr_r_data_out,
+	
+	input interrupt,
+	input illegal_inst,
+	input l_access_fault,
+	input s_access_fault,
+	input ecall_m,
+	input[31:0] faultaddr,
+	
+	input mret,
+	
+	input[31:0] epc_cur,
+	input inst_is_zero,
+	input[31:0] epc_next,
+	output [31:0] PC_redirect,
+	output redirect_mux,
+	
+	output reg_FD_flush, reg_DE_flush, reg_EM_flush, reg_MW_flush, 
+	output RegWrite_cancel
 );
 
-    localparam mstatus = 4'd0;
-    localparam mie     = 4'd4;
-    localparam mtvec   = 4'd5;
-    localparam mepc    = 4'd9;
-    localparam mcause  = 4'd10;
-    localparam mtval   = 4'd11;
-    localparam mip     = 4'd12;
-    localparam csrrw   = 3'b001;
-    localparam csrrs   = 3'b010;
-    localparam csrrc   = 3'b011;
-    localparam csrrwi  = 3'b101;
-    localparam csrrsi  = 3'b110;
-    localparam csrrci  = 3'b111;
+	wire [31:0] wdata;
+	
+	reg[31:0] CSR [0:15];
+	
+	wire ex_in=interrupt|illegal_inst|l_access_fault|s_access_fault|ecall_m;
+	localparam mstatus = 0;
+	localparam mie     = 4;
+	localparam mtvec   = 5;
+	localparam mepc    = 9;
+	localparam mcause  = 10;
+	localparam mtval   = 11;
+	localparam mip     = 12;
+	
+	// Address mapping. The address is 12 bits, but only 4 bits are used in this module.
+	wire raddr_valid = csr_rw_addr_in[11:7] == 5'h6 && csr_rw_addr_in[5:3] == 3'h0;
+	wire[3:0] raddr_map = (csr_rw_addr_in[6] << 3) + csr_rw_addr_in[2:0];
+	wire waddr_valid = csr_rw_addr_in[11:7] == 5'h6 && csr_rw_addr_in[5:3] == 3'h0;
+	wire[3:0] waddr_map = (csr_rw_addr_in[6] << 3) + csr_rw_addr_in[2:0];
+	
+	assign csr_r_data_out = CSR[raddr_map];
+	assign wdata = csr_w_imm_mux ? csr_w_data_imm : csr_w_data_reg;
+	
+	//According to the diagram, design the Exception Unit
+	always@(posedge clk or posedge rst)begin
+		if(rst) begin
+			CSR[0] = 32'h88;
+			CSR[1] = 0;
+			CSR[2] = 0;
+			CSR[3] = 0;
+			CSR[4] = 32'hfff;
+			CSR[5] = 0;
+			CSR[6] = 0;
+			CSR[7] = 0;
+			CSR[8] = 0;
+			CSR[9] = 0;
+			CSR[10] = 0;
+			CSR[11] = 0;
+			CSR[12] = 0;
+			CSR[13] = 0;
+			CSR[14] = 0;
+			CSR[15] = 0;
+		end
+		else if(csr_rw_in && ~ex_in) begin
+			case(csr_wsc_mode_in)
+				2'b01: CSR[waddr_map] = wdata;
+				2'b10: CSR[waddr_map] = CSR[waddr_map] | wdata;
+				2'b11: CSR[waddr_map] = CSR[waddr_map] & ~wdata;
+				default: CSR[waddr_map] = wdata;
+			endcase            
+		end
+		else if(ex_in && CSR[mstatus][3]==1 && ~inst_is_zero ) begin
+			CSR[mepc] = interrupt ? epc_next : epc_cur ;
+			if (interrupt) begin
+				CSR[mcause]=32'h800b;
+			end 
+			else begin
+				if(ecall_m) CSR[mcause]=32'hb;
+				else if(s_access_fault) CSR[mcause]=32'h6;
+				else if(l_access_fault) CSR[mcause]=32'h4;
+				else if(illegal_inst) CSR[mcause]=32'h2;
+			end
+			if (~interrupt) begin
+				if(ecall_m) CSR[mtval]=0;
+				else if(s_access_fault) CSR[mtval]=faultaddr;
+				else if(l_access_fault) CSR[mtval]=faultaddr;
+				else if(illegal_inst) CSR[mtval]=epc_cur;
+			end
+			CSR[mstatus][7]=CSR[mstatus][3];
+			CSR[mstatus][3]=0;
+		end  
+		else if(mret) begin;
+			CSR[mstatus][3]=CSR[mstatus][7];
+		end     
+	end
+	
+	assign PC_redirect = (ex_in & CSR[mstatus][3] & ~inst_is_zero) ? CSR[mtvec] :
+						mret ? CSR[mepc] : 0;
+	assign redirect_mux = (ex_in & CSR[mstatus][3] & ~inst_is_zero) | mret;
+	assign reg_FD_flush= (ex_in & CSR[mstatus][3] & ~inst_is_zero)|mret;
+	assign reg_DE_flush= (ex_in & CSR[mstatus][3] & ~inst_is_zero)|mret;
+	assign reg_EM_flush= (ex_in & CSR[mstatus][3] & ~inst_is_zero)|mret; 
+	assign reg_MW_flush= (ex_in & CSR[mstatus][3] & ~inst_is_zero)|mret; 
+	assign RegWrite_cancel= ex_in & CSR[mstatus][3] & ~inst_is_zero;
 
-    wire Inter_Exp = illegal_inst | l_access_fault | s_access_fault | ecall_m;
-    /*将CSR模块提出*/
-    reg[31:0] CSR [0:15];
-    reg[1:0] mp = 2'b11;
-    wire [11:0] raddr, waddr; 
-    wire [31:0] wdata;
-    wire [1:0] csr_wsc_mode;
-    wire csr_w;
-
-    assign raddr = csr_rw_addr_in;
-    assign waddr = csr_rw_addr_in;
-    assign csr_w = csr_rw_in;
-    assign wdata = csr_w_imm_mux ? {27'b0, csr_w_data_imm} : csr_w_data_reg;
-    assign csr_wsc_mode = csr_wsc_mode_in;
-
-    // Address mapping. The address is 12 bits, but only 4 bits are used in this module.
-    wire raddr_valid = raddr[11:7] == 5'h6 && raddr[5:3] == 3'h0;
-    wire[3:0] raddr_map = (raddr[6] << 3) + raddr[2:0];
-    wire waddr_valid = waddr[11:7] == 5'h6 && waddr[5:3] == 3'h0;
-    wire[3:0] waddr_map = (waddr[6] << 3) + waddr[2:0];
-
-    always@(posedge clk or posedge rst) begin
-        if(rst) begin
-            CSR[0] <= 32'h88;
-            CSR[1] <= 0;
-            CSR[2] <= 0;
-            CSR[3] <= 0;
-            CSR[4] <= 32'hfff;
-            CSR[5] <= 0;
-            CSR[6] <= 0;
-            CSR[7] <= 0;
-            CSR[8] <= 0; 
-            CSR[9] <= 0;
-            CSR[10] <= 0;
-            CSR[11] <= 0;
-            CSR[12] <= 0;
-            CSR[13] <= 0;
-            CSR[14] <= 0;
-            CSR[15] <= 0;
-
-        end
-        else if(csr_w) begin
-            case(csr_wsc_mode)
-                2'b01: CSR[waddr_map] = wdata;
-                2'b10: CSR[waddr_map] = CSR[waddr_map] | wdata;
-                2'b11: CSR[waddr_map] = CSR[waddr_map] & ~wdata;
-                default: CSR[waddr_map] = wdata;
-            endcase 
-                
-        end
-        else if(mret) begin
-            CSR[mstatus][3] <= CSR[mstatus][7];
-            mp <= CSR[mstatus][12:11];
-        end
-        else if(interrupt & CSR[mstatus][3] & CSR[mie][11] & ~isZero) begin
-            CSR[mepc]       <= epc_next;
-            CSR[mcause]     <= {1'b1, 31'd11};
-            //CSR[mtval]在中断时无需修改
-            CSR[mstatus][7] <= CSR[mstatus][3];
-            CSR[mstatus][3] <= 1'b0;
-            //权限模式变化 mstatus.mpp<-mp;  mp<-11
-            CSR[mstatus][12:11] <= mp;
-            mp <= 2'b11;
-        end
-        else if(Inter_Exp & CSR[mstatus][3]) begin
-            CSR[mepc]       <= epc_cur;
-            if(illegal_inst) begin
-                CSR[mcause] <= {1'b0, 31'd2};
-            end
-            else if(ecall_m) begin
-                CSR[mcause] <= {1'b0, 31'd11};
-            end
-            else if(l_access_fault) begin
-                CSR[mcause] <= {1'b0, 31'd4};
-            end
-            else if(s_access_fault) begin
-                CSR[mcause] <= {1'b0, 31'd6};
-            end
-            
-            if(l_access_fault | s_access_fault) begin
-                CSR[mtval]  <= fault_addr; 
-            end
-            else if(illegal_inst) begin
-                CSR[mtval] <= epc_cur;
-            end
-            else begin
-                CSR[mtval]  <= 0;
-            end
-            CSR[mstatus][7] <= CSR[mstatus][3];
-            CSR[mstatus][3] <= 1'b0;
-            //权限模式变化 mstatus.mpp<-mp;  mp<-11
-            CSR[mstatus][12:11] <= mp;
-            mp <= 2'b11;
-        end
-    end
-
-    assign redirect_mux = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign reg_FD_flush = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign reg_DE_flush = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign reg_EM_flush = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign reg_MW_flush = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign RegWrite_cancel = mret | (((interrupt & ~isZero) | Inter_Exp) & CSR[mstatus][3]);
-    assign PC_redirect  = rst                           ? 32'h0 : 
-                            mret                          ? CSR[mepc] : 
-                            ((interrupt & ~isZero) & CSR[mstatus][3]) ? CSR[mtvec] :
-                            (Inter_Exp & CSR[mstatus][3]) ? CSR[mtvec] :
-                            CSR[raddr_map];
-    assign csr_r_data_out = CSR[raddr_map];
 endmodule
 \end{lstlisting}
 
@@ -498,8 +460,8 @@ module  RV32core(
         .s_access_fault(~isFlushed_WB & exp_vector_WB[0]),
         .mret(mret_MEM),
         /*自行添加*/
-        .fault_addr(ALUout_WB),
-        .isZero(inst_WB ? 0 : 1),
+        .faultaddr(ALUout_WB),
+        .inst_is_zero(inst_WB ? 0 : 1),
         /*自行添加*/    
         .epc_cur(PC_WB),
         .epc_next(~isFlushed_MEM ? PC_MEM : ~isFlushed_EXE ? PC_EXE :
