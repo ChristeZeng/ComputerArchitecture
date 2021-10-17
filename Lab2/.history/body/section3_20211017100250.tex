@@ -577,3 +577,103 @@ module  RV32core(
 
 endmodule
 \end{lstlisting}
+
+% \subsection{HazardUnit}
+% 在此次的实验中，Hazard由结构竞争、数据冒险和控制竞争三部分组成，出于效率与实现复杂度的考虑
+% 本模块被设计在ID阶段，利用段寄存的Flush与Stall功能实现插入bubble或者清空段寄存器数据
+% 并且本次实验还设计了Forward Units以减少停顿次数，提高流水线效率，同时本模块中实现了Predict-Not-Taken的
+% 跳转策略，在ID阶段识别并执行跳转语句。具体的设计分几部分阐述如下：
+
+% \subparagraph{ForwardUnits}
+% 前送只涉及到EX, MEM, WB三个阶段的数据前送，在此实验中分为ALU的两个数据输入口进行讨论，
+% 其中ALU的1号操作数口接受来自：
+% \begin{itemize}
+%     \item [1.] ID阶段读取的寄存器值的rs1\_val
+%     \item [2.] EXE阶段的上一条指令EX阶段的ALU计算结果
+%     \item [3.] MEM阶段的上一条指令EX阶段的ALU计算结果
+%     \item [4.] WB阶段将要写回Memory的数据结果
+% \end{itemize}
+% 当没有前递时，直接选择ID阶段读取的寄存器值，但只涉及到两条运算指令的RAW并且EX阶段运算得到的结果在ID阶段就需要使用时选择2号数据，当两条产生冲突的普通运算指令
+% 中间隔了一条无关指令，也即MEM阶段还未写入的数据在ID阶段又需要使用时选择3号数据，4号数据是提供给涉及到Load与一条普通运算指令之间产生的数据冲突使用的，也即当Load指令
+% 所对应的内存数据还未写入寄存器但ID阶段又使用到此寄存器时选择数据4。 \\
+% 所以前送ALU操作数1口的条件应该是:
+% \begin{itemize}
+%     \item [1.] regw\_exe \& rs1\_ID==rd\_EXE \& rs1use\_ID
+%     \item [2.] regw\_mem \& rs1\_ID==rd\_MEM \& rs1use\_ID \& ~mem\_load
+%     \item [3.] regw\_mem \& rs1\_ID==rd\_MEM \& rs1use\_ID \& mem\_load
+%     \item [4.] others
+% \end{itemize}
+% ALU操作数的2口分析与1口类似，ALU的2号操作数口接受来自：
+% \begin{itemize}
+%     \item [1.] ID阶段读取的寄存器值的rs2\_val
+%     \item [2.] EXE阶段的上一条指令EX阶段的ALU计算结果
+%     \item [3.] MEM阶段的上一条指令EX阶段的ALU计算结果
+%     \item [4.] WB阶段将要写回Memory的数据结果
+% \end{itemize}
+% 前送ALU操作数2口的条件应该是：
+% \begin{itemize}
+%     \item [1.] regw\_exe \& rs2\_ID==rd\_EXE \& rs2use\_ID
+%     \item [2.] regw\_mem \& rs2\_ID==rd\_MEM \& rs2use\_ID \& ~mem\_load
+%     \item [3.] regw\_mem \& rs2\_ID==rd\_MEM \& rs2use\_ID \& mem\_load
+%     \item [4.] others
+% \end{itemize}
+% 这样使得涉及到算数指令的Read After Write冲突无需任何停顿即可得到正确结果，使得涉及到Load指令的RAW情形仅需一次停顿即可避免数据冲突。 \\
+% 除了ALU的前递之外，此次实验还存在一种特殊的前递，Load指令之后紧接Store指令并发生冲突时，需要通过ls信号控制将Load阶段将要写入内存的寄存器值前递给Store指令。
+% \subparagraph{Predict-Not-Taken}
+% 对于跳转指令的判断，我组均是在ID阶段判断并跳转，若ID阶段检测到不满足跳转条件(Branch指令不跳转且不为JAL, JALR指令)，
+% 则流水线继续执行，若ID阶段检测到跳转(Branch满足跳转条件或Jal, Jalr必定跳转)，则将下一条PC地址的值修改为跳转的目标地址，并且将IF/ID段寄存器的值
+% Flush掉(清空)，这样可以使得无效指令全部被清空，并且跳转指令的剩下部分继续向后流动直至执行完毕(例如jal, jalr指令还需将PC + 4的值写入寄存器)
+% 所以此实验实现了只Flush一个段寄存器无需Stall的Predict-Not-Taken策略
+
+% \subparagraph{DataHazard}
+% 尽管拥有了前递单元，实验中仅需将涉及到Load指令的RAW情形还是无法仅通过前递解决，也就是说Load与后续一条季运算指令的数据冲突需要使得后续指令停顿一拍，在EX阶段判断并插入bubble，
+% 并且插入bubble的方式就是将EX/MEM段寄存器Flush掉，并使得IF/ID与ID/EX段寄存器Stall(停顿)一个周期 \\
+
+% 综上原理，我组设计的HazardUnit代码如下：
+% \begin{lstlisting}[language = {verilog}]
+% `timescale 1ps/1ps
+
+% module HazardDetectionUnit(
+%     input clk,
+%     input Branch_ID, rs1use_ID, rs2use_ID,
+%     input[1:0] hazard_optype_ID,
+%     input[4:0] rd_EXE, rd_MEM, rs1_ID, rs2_ID, rs2_EXE,
+%     output PC_EN_IF, reg_FD_EN, reg_FD_stall, reg_FD_flush,
+%         reg_DE_EN, reg_DE_flush, reg_EM_EN, reg_EM_flush, reg_MW_EN,
+%     output forward_ctrl_ls,
+%     output[1:0] forward_ctrl_A, forward_ctrl_B
+% );
+%     wire regw_exe, regw_mem;
+%     reg [1:0] hazard_optype_EXE;
+%     reg [1:0] hazard_optype_MEM;
+%     always@(posedge clk) begin
+%         hazard_optype_MEM=hazard_optype_EXE;
+%         hazard_optype_EXE=hazard_optype_ID;
+%     end
+%     wire id_store=hazard_optype_ID==2'b01 ? 1:0;
+%     wire exe_load=hazard_optype_EXE==2'b10 ? 1:0;
+%     wire mem_load=hazard_optype_MEM==2'b10 ? 1:0;
+%     wire exe_store=hazard_optype_EXE==7'b01 ? 1:0;
+%     wire mem_store=hazard_optype_MEM==7'b01 ? 1:0;
+%     assign regw_exe=(hazard_optype_EXE==2'b00) || (hazard_optype_EXE==2'b10);
+%     assign regw_mem=(hazard_optype_MEM==2'b00) || (hazard_optype_MEM==2'b10);
+%     wire stall=exe_load && !id_store && ((rs1_ID==rd_EXE && rs1use_ID) || (rs2_ID==rd_EXE && rs2use_ID));
+    
+%     assign forward_ctrl_A=(regw_exe && rs1_ID==rd_EXE && rs1use_ID)? 2'b01:
+%                             (regw_mem && rs1_ID==rd_MEM && rs1use_ID)? (mem_load ? 2'b11:2'b10):2'b00;
+%     assign forward_ctrl_B=(regw_exe && rs2_ID==rd_EXE && rs2use_ID)? 2'b01:
+%                             (regw_mem && rs2_ID==rd_MEM && rs2use_ID)? (mem_load ? 2'b11:2'b10):2'b00;
+%     assign forward_ctrl_ls=(rs2_EXE==rd_MEM && mem_load && exe_store)?1:0;
+    
+%     assign PC_EN_IF=!stall;
+%     assign reg_FD_EN=1;
+%     assign reg_FD_stall=stall;
+%     assign reg_FD_flush=Branch_ID;
+%     assign reg_DE_EN=1;
+%     assign reg_DE_flush=stall;
+%     assign reg_EM_EN=1;
+%     assign reg_EM_flush=stall;
+%     assign reg_MW_EN=1;
+
+% endmodule    
+% \end{lstlisting}
