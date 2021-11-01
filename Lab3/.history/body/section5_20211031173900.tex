@@ -1,0 +1,234 @@
+\section{实验结果与分析}
+本次实验比较特殊，仅通过仿真即可完成实验结果的正确性检测。
+
+\subsection{仿真代码设计}
+为了验证各项功能与各种情况的正确性，我组使用了如下仿真代码
+
+\begin{lstlisting}[language = {verilog}]
+module cache_sim;
+
+// Inputs
+reg clk;
+reg rst;
+reg [31:0] addr;
+reg load;
+reg store;
+reg edit;
+reg invalid;
+reg [2:0] u_b_h_w;
+reg [31:0] din;
+
+// Outputs
+wire hit;
+wire [31:0] dout;
+wire valid;
+wire dirty;
+wire [22:0] tag;
+
+// Instantiate the Unit Under Test (UUT)
+cache uut (
+	.clk(~clk), 
+	.rst(rst), 
+	.addr(addr), 
+	.load(load),
+	.store(store), 
+	.edit(edit), 
+	.invalid(invalid), 
+	.u_b_h_w(u_b_h_w),
+	.din(din), 
+	.hit(hit), 
+	.dout(dout), 
+	.valid(valid), 
+	.dirty(dirty), 
+	.tag(tag)
+);
+
+initial begin
+	clk = 1;
+	forever #10 clk = ~clk ;
+end
+
+reg [31:0]counter = 0;
+
+always @(posedge clk) begin
+	counter <= counter + 32'b1;
+
+	case (counter)
+		// Initialize Inputs
+		32'd0: begin
+			rst <= 0;
+			addr <= 0;
+			load <= 0;
+			store <= 0;
+			edit <= 0;
+			invalid <= 0;
+			u_b_h_w <= 0;
+			din <= 0;
+		end
+
+		// init
+		32'd10: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			din <= 32'h11111111;
+			addr <= 32'h00000004;
+		end
+
+		32'd11: begin
+			addr <= 32'h0000000C;
+		end
+
+		32'd12: begin
+			addr <= 32'h00000010;
+		end
+
+		32'd13: begin
+			addr <= 32'h00000014;
+		end
+
+		// read miss
+		32'd14: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000020;
+		end
+
+		// read hit
+		32'd15: begin
+			u_b_h_w <= 3'b010;
+			addr <= 32'h00000010;
+		end
+
+		// write miss
+		32'd16: begin
+			load <= 0;
+			store <= 0;
+			edit <= 1;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h22222222;
+			addr <= 32'h000000024;
+		end
+
+		// write hit
+		32'd17: begin
+			u_b_h_w <= 3'b010;
+			addr <= 32'h00000014;
+		end
+
+
+		// read line 0 of set 0, set recent bit
+		32'd18: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000004;
+		end
+
+		// store to line 1 of set 0 due to line 0 recent
+		32'd19: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h33333333;
+			addr <= 32'h00000204;
+		end
+
+		// edit line 1 of set 0, set dirty & recent
+		32'd20: begin
+			load <= 0;
+			store <= 0;
+			edit <= 1;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h44444444;
+			addr <= 32'h00000204;
+		end
+
+		// read line 0 of set 0, set recent bit
+		32'd21: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000004;
+		end
+
+		// read miss, tag mismatch. output tag (of line 1), valid and dirty == 1
+		32'd22: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+			
+			u_b_h_w <= 3'b010;
+			din <= 32'h0;
+			addr <= 32'h00000404;
+		end
+
+		// auto replace line 1 of set 0
+		32'd23: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h55555555;
+			addr <= 32'h00000404;
+		end
+
+		// clear
+		default: begin
+			load <= 0;
+			store <= 0;
+			edit <= 0;
+			din <= 0;
+			addr <= 0;
+		end
+	endcase
+end
+
+endmodule    
+\end{lstlisting}
+\subsection{异常与中断跳转}
+当触发异常或中断时，清空尚未结束的所有指令，并跳转至中断/异常处理程序\\
+遇到ecall指令触发异常
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/7.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{验证结果图1} %最终文档中希望显示的图片标题
+	\label{Fig.17} %用于文内引用的标签
+\end{figure}
+进入trap时清空先前指令
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/8.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{验证结果图2} %最终文档中希望显示的图片标题
+	\label{Fig.18} %用于文内引用的标签
+\end{figure}
+trap中指令的运行
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/9.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{验证结果图3} %最终文档中希望显示的图片标题
+	\label{Fig.19} %用于文内引用的标签
+\end{figure}
+运行至mret后，清空后面的所有指令并跳转回原程序
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/10.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{验证结果图4} %最终文档中希望显示的图片标题
+	\label{Fig.20} %用于文内引用的标签
+\end{figure}

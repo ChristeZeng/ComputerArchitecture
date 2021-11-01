@@ -1,0 +1,17 @@
+\contentsline {section}{\numberline {1}实验目的}{3}{section.1}% 
+\contentsline {section}{\numberline {2}实验内容}{3}{section.2}% 
+\contentsline {section}{\numberline {3}实验原理}{3}{section.3}% 
+\contentsline {subsection}{\numberline {3.1}Data Line设计}{3}{subsection.3.1}% 
+\contentsline {subsection}{\numberline {3.2}Cache Mode}{4}{subsection.3.2}% 
+\contentsline {subparagraph}{Write Back}{5}{section*.3}% 
+\contentsline {subparagraph}{Write Allocate}{5}{section*.4}% 
+\contentsline {subparagraph}{LRU策略}{5}{section*.5}% 
+\contentsline {subsection}{\numberline {3.3}源代码}{5}{subsection.3.3}% 
+\contentsline {section}{\numberline {4}实验结果与分析}{11}{section.4}% 
+\contentsline {subsection}{\numberline {4.1}仿真代码设计}{11}{subsection.4.1}% 
+\contentsline {subsection}{\numberline {4.2}仿真结果分析}{16}{subsection.4.2}% 
+\contentsline {subparagraph}{Store实现Cache的初始化}{16}{section*.7}% 
+\contentsline {subparagraph}{Read验证}{17}{section*.9}% 
+\contentsline {subparagraph}{Write验证}{18}{section*.11}% 
+\contentsline {subparagraph}{Cache Mode验证}{19}{section*.13}% 
+\contentsline {section}{\numberline {5}讨论与心得}{20}{section.5}% 

@@ -174,7 +174,7 @@ module ExceptionUnit(
 	input s_access_fault,
 	input ecall_m,
 	input[31:0] faultaddr,
-	
+	input[31:0] faultInst,
 	input mret,
 	
 	input[31:0] epc_cur,
@@ -252,7 +252,7 @@ module ExceptionUnit(
 				if(ecall_m) CSR[mtval]=0;
 				else if(s_access_fault) CSR[mtval]=faultaddr;
 				else if(l_access_fault) CSR[mtval]=faultaddr;
-				else if(illegal_inst) CSR[mtval]=epc_cur;
+				else if(illegal_inst) CSR[mtval]=faultInst;
 			end
 			CSR[mstatus][7]=CSR[mstatus][3];
 			CSR[mstatus][3]=0;
@@ -462,6 +462,7 @@ module  RV32core(
         /*自行添加*/
         .faultaddr(ALUout_WB),
         .inst_is_zero(inst_WB ? 0 : 1),
+        .faultInst(inst_WB),
         /*自行添加*/    
         .epc_cur(PC_WB),
         .epc_next(~isFlushed_MEM ? PC_MEM : ~isFlushed_EXE ? PC_EXE :
