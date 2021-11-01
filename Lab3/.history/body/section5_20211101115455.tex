@@ -257,21 +257,4 @@ endmodule
 	\label{Fig.5} %用于文内引用的标签
 \end{figure}
 
-\subparagraph{Cache Mode验证}
-下面的过程会通过一系列读写操作完成对本次实验中使用到的Cache Mode进行验证，主要验证
-LRU替换策略，Write Back与Write Allocate策略。
-
-首先使用ld指令读取地址为32'h00000004的一个word，显然是Hit的，并且这一操作会使此数据块(line 0)被设置为最近使用。
-再使用store指令写入到32'h00000204，此时会将此地址的数据块读入到set 0，但是由于line 0的recent位为1，
-说明最近被使用，所以会直接store到的line 1，并且是写失效。
-下个周期修改地址为32'h00000204的Word，此时line 1被修改，Dirty位与Recent位均被置为1，line 0的recent位被置为1为0，从仿真结果来看正确。
-然后再通过read操作读取一个line 0，使其成为最近访问的Data Line。
-然后再读取32'h00000404的数据块，此时由于tag位与两个Data Line均不匹配，会发生read miss。
-最后写入内容32'h00000404，发生write miss，并且由于LRU策略此时line 1是需要被替换的那一块，而line 1又是有效并且Dirty的，所以line 1会被写回内存，从仿真图来看结果正确。
-
-\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
-	\centering %图片居中
-	\includegraphics[width=1.0\textwidth]{figs/res5.png} %插入图片，[]中设置图片大小，{}中是图片文件名
-	\caption{CacheMode验证} %最终文档中希望显示的图片标题
-	\label{Fig.6} %用于文内引用的标签
-\end{figure}
+\subparagraph{}
