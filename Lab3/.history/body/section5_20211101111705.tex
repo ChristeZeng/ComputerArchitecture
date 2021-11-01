@@ -1,0 +1,246 @@
+\section{实验结果与分析}
+本次实验比较特殊，仅通过仿真即可完成实验结果的正确性检测。
+
+\subsection{仿真代码设计}
+为了验证各项功能与各种情况的正确性，我组使用了如下仿真代码
+
+\begin{lstlisting}[language = {verilog}]
+module cache_sim;
+
+// Inputs
+reg clk;
+reg rst;
+reg [31:0] addr;
+reg load;
+reg store;
+reg edit;
+reg invalid;
+reg [2:0] u_b_h_w;
+reg [31:0] din;
+
+// Outputs
+wire hit;
+wire [31:0] dout;
+wire valid;
+wire dirty;
+wire [22:0] tag;
+
+// Instantiate the Unit Under Test (UUT)
+cache uut (
+	.clk(~clk), 
+	.rst(rst), 
+	.addr(addr), 
+	.load(load),
+	.store(store), 
+	.edit(edit), 
+	.invalid(invalid), 
+	.u_b_h_w(u_b_h_w),
+	.din(din), 
+	.hit(hit), 
+	.dout(dout), 
+	.valid(valid), 
+	.dirty(dirty), 
+	.tag(tag)
+);
+
+initial begin
+	clk = 1;
+	forever #10 clk = ~clk ;
+end
+
+reg [31:0]counter = 0;
+
+always @(posedge clk) begin
+	counter <= counter + 32'b1;
+
+	case (counter)
+		// Initialize Inputs
+		32'd0: begin
+			rst <= 0;
+			addr <= 0;
+			load <= 0;
+			store <= 0;
+			edit <= 0;
+			invalid <= 0;
+			u_b_h_w <= 0;
+			din <= 0;
+		end
+
+		// init
+		32'd10: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			din <= 32'h11111111;
+			addr <= 32'h00000004;
+		end
+
+		32'd11: begin
+			addr <= 32'h0000000C;
+		end
+
+		32'd12: begin
+			addr <= 32'h00000010;
+		end
+
+		32'd13: begin
+			addr <= 32'h00000014;
+		end
+
+		// read miss
+		32'd14: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000020;
+		end
+
+		// read hit
+		32'd15: begin
+			u_b_h_w <= 3'b010;
+			addr <= 32'h00000010;
+		end
+
+		// write miss
+		32'd16: begin
+			load <= 0;
+			store <= 0;
+			edit <= 1;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h22222222;
+			addr <= 32'h000000024;
+		end
+
+		// write hit
+		32'd17: begin
+			u_b_h_w <= 3'b010;
+			addr <= 32'h00000014;
+		end
+
+
+		// read line 0 of set 0, set recent bit
+		32'd18: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000004;
+		end
+
+		// store to line 1 of set 0 due to line 0 recent
+		32'd19: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h33333333;
+			addr <= 32'h00000204;
+		end
+
+		// edit line 1 of set 0, set dirty & recent
+		32'd20: begin
+			load <= 0;
+			store <= 0;
+			edit <= 1;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h44444444;
+			addr <= 32'h00000204;
+		end
+
+		// read line 0 of set 0, set recent bit
+		32'd21: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 0;
+			addr <= 32'h00000004;
+		end
+
+		// read miss, tag mismatch. output tag (of line 1), valid and dirty == 1
+		32'd22: begin
+			load <= 1;
+			store <= 0;
+			edit <= 0;
+			
+			u_b_h_w <= 3'b010;
+			din <= 32'h0;
+			addr <= 32'h00000404;
+		end
+
+		// auto replace line 1 of set 0
+		32'd23: begin
+			load <= 0;
+			store <= 1;
+			edit <= 0;
+
+			u_b_h_w <= 3'b010;
+			din <= 32'h55555555;
+			addr <= 32'h00000404;
+		end
+
+		// clear
+		default: begin
+			load <= 0;
+			store <= 0;
+			edit <= 0;
+			din <= 0;
+			addr <= 0;
+		end
+	endcase
+end
+
+endmodule    
+\end{lstlisting}
+
+\subsection{仿真结果分析}
+
+根据仿真代代码，我们组对仿真结果的详细分析如下所示：首先我们需要对整个cache进行初始化，
+清空所有缓存并重置所有控制信号，这个过程持续十个周期
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/res1.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{初始化过程} %最终文档中希望显示的图片标题
+	\label{Fig.2} %用于文内引用的标签
+\end{figure}
+
+\subparagraph{Store实现Cache的初始化}
+状态初始化之后，首先验证store的正确性，
+首先输入的数据为32'h11111111，地址为32'h00000004，此时hit信号为0，说明是写缺失。
+然后紧接着保持需要写入的数据不变，将写入地址改为32'h0000000C，此时我们可以发现32'h0000000C的Index与Tag均与32'h00000004相同，仿真结果上hit信号也升起，结果正确。
+继续保持写入数据不变，将写入地址改为32'h00000010，此时Index与cache中的已经写入的Data Line均不同，hit信号没有升起，Cache将对应块读入。
+最后将写入地址改变为32'h00000014此地址对应的Data Line与32'h00000010相同，故又会产生hit信号，仿真结果正确。
+至此，Cache的Index为0, 1的两个Data Line都被填满。
+
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/res2.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{Store过程} %最终文档中希望显示的图片标题
+	\label{Fig.3} %用于文内引用的标签
+\end{figure}
+
+\subparagraph{Read验证}
+通过上述过程，Cache已经被初始化完毕，我们写下来验证read miss的情形，我们采用load读取
+32'h00000020地址所对应的一个Word的形式来验证，32'h00000020的Index为2，
+会产生read miss，hit信号没有升起，并且会将此块读入Cache
+在下一个周期，当我们读取32'h00000010的一个Word时，会发现Index为1的Data Line中有Tag为0的Data Line，
+此时hit信号升起，并且Tag位0的数据块由于产生了读取操作，属于最近被访问，它的recent位会被置为1，与之对应的另一Data Line的recent位被置为0
+从仿真图的对应位置来看，仿真结果正确。
+
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/res3.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{Read过程} %最终文档中希望显示的图片标题
+	\label{Fig.4} %用于文内引用的标签
+\end{figure}
+

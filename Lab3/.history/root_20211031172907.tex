@@ -1,0 +1,46 @@
+%! TEX program = xelatex
+
+\documentclass[a4paper,12pt]{article}
+\usepackage[UTF8]{ctex}
+\input{package.tex}
+\input{command.tex}
+
+\lstset{
+    %backgroundcolor=\color{red!50!green!50!blue!50},%代码块背景色为浅灰色
+    rulesepcolor= \color{gray}, %代码块边框颜色
+    basicstyle = \footnotesize,
+    breaklines=true,  %代码过长则换行
+    numbers=left, %行号在左侧显示
+    numberstyle= \small,%行号字体
+    %keywordstyle= \color{blue},%关键字颜色
+    commentstyle=\color{gray}, %注释颜色
+    frame=shadowbox%用方框框住代码块
+}
+\begin{document}
+\captionsetup{font={footnotesize}}
+
+\input{cover.tex}
+
+% \newpage
+% \input{abstract.tex}
+
+\newpage
+\tableofcontents
+
+\newpage
+\input{body/section1.tex}
+\input{body/section2.tex}
+\input{body/section3.tex}
+%\input{body/section4.tex}
+\input{body/section5.tex}
+\input{body/section6.tex}
+% \newpage
+% \input{body/ref.tex}
+\end{document}
+
+\begin{thebibliography}{99}  
+    \bibitem{ref1}Zheng L, Wang S, Tian L, et al., Query-adaptive late fusion for image search and person re-identification, Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2015: 1741-1750.  
+    \bibitem{ref2}Arandjelović R, Zisserman A, Three things everyone should know to improve object retrieval, Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on, IEEE, 2012: 2911-2918.  
+    \bibitem{ref3}Lowe D G. Distinctive image features from scale-invariant keypoints, International journal of computer vision, 2004, 60(2): 91-110.  
+    \bibitem{ref4}Philbin J, Chum O, Isard M, et al. Lost in quantization: Improving particular object retrieval in large scale image databases, Computer Vision and Pattern Recognition, 2008. CVPR 2008, IEEE Conference on, IEEE, 2008: 1-8.  
+\end{thebibliography}
