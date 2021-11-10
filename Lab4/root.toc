@@ -1,0 +1,16 @@
+\contentsline {section}{\numberline {1}实验目的}{3}{section.1}% 
+\contentsline {section}{\numberline {2}实验内容}{3}{section.2}% 
+\contentsline {section}{\numberline {3}实验原理}{3}{section.3}% 
+\contentsline {subsection}{\numberline {3.1}Cache Management Unit}{3}{subsection.3.1}% 
+\contentsline {subsection}{\numberline {3.2}Cache Operation Flow}{4}{subsection.3.2}% 
+\contentsline {subsection}{\numberline {3.3}Cache Management State Machine}{6}{subsection.3.3}% 
+\contentsline {subsection}{\numberline {3.4}源代码}{7}{subsection.3.4}% 
+\contentsline {section}{\numberline {4}实验步骤与调试}{11}{section.4}% 
+\contentsline {subsection}{\numberline {4.1}仿真}{11}{subsection.4.1}% 
+\contentsline {subsection}{\numberline {4.2}综合}{12}{subsection.4.2}% 
+\contentsline {subsection}{\numberline {4.3}实现}{12}{subsection.4.3}% 
+\contentsline {subsection}{\numberline {4.4}验证设计}{12}{subsection.4.4}% 
+\contentsline {subsection}{\numberline {4.5}生成二进制文件}{12}{subsection.4.5}% 
+\contentsline {subsection}{\numberline {4.6}烧写上板}{12}{subsection.4.6}% 
+\contentsline {section}{\numberline {5}实验结果与分析}{12}{section.5}% 
+\contentsline {section}{\numberline {6}讨论与心得}{12}{section.6}% 

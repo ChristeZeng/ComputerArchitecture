@@ -1,0 +1,10 @@
+%! TEX program = xelatex
+%! TEX root = ../root.tex
+
+\section{实验步骤与调试}
+\subsection{仿真} 根据已经写好的代码，进行仿真模拟\\
+\subsection{综合} 选择左侧面板的Run Synthesis或者点击上方的绿色小三角，选择Synthesis
+\subsection{实现} 选择左侧面板的Run Implementation或者点击上方的绿色小三角，选择Implementation。值得注意的是执行implementation之前应该确保引脚约束存在且正确，同时之前已经综合过最新的代码。
+\subsection{验证设计} 选择左侧面板的Open Elaborated Design，输出的结果如下，根据原理图来判断，基本没有问题
+\subsection{生成二进制文件} 选择左侧面板的Generate Bitstream或者点击上上的绿色二进制标志。同时生成Bitstream前要确保:之前已经综合、实现过最新的代码。如没有，直接运行会默认从综合、实现开始。此过程还要注意生成的bit文件默认存放在.runs下相应的implementation文件夹中
+\subsection{烧写上板} 点击左侧的Open Hardware Manager $\rightarrow$ 点击Open Target $\rightarrow$ Auto Connect $\rightarrow$ 点击Program Device $\rightarrow$ 选择bistream路径，烧写。验证结果见实验结果部分。
