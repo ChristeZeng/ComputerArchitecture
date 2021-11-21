@@ -230,7 +230,7 @@ module cmu (
 	assign mem_data_o = cache_dout;
 	
 	//important
-	assign stall = mem_ack_i | mem_cs_o;
+	assign stall = (next_state != S_IDLE);
 	
 endmodule
 	

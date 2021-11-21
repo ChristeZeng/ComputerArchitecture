@@ -146,8 +146,8 @@ module cache (
 
     always @ (posedge clk) begin
         valid <= recent1 ? valid2 : valid1;
-        dirty <= recent1 ? dirty2 : dirty1;    //need to fill in
-        tag <= recent1 ? tag2 : tag1;          //need to fill in
+        dirty <= recent2 ? dirty1 : dirty2;    //need to fill in
+        tag <= hit1 ? tag1 : tag2;             //need to fill in
         hit <= hit1 | hit2;                    //need to fill in
         
         // read $ with load==0 means moving data from $ to mem
