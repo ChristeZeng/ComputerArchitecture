@@ -1,0 +1,25 @@
+\contentsline {section}{\numberline {1}实验目的}{3}{section.1}%
+\contentsline {section}{\numberline {2}实验内容}{3}{section.2}%
+\contentsline {section}{\numberline {3}实验原理}{3}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Datapath}{3}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Data Hazard}{9}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Control Hazard}{10}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}FU阶段}{17}{subsection.3.4}%
+\contentsline {subparagraph}{FU\_ALU}{17}{section*.5}%
+\contentsline {subparagraph}{FU\_mem}{19}{section*.6}%
+\contentsline {subparagraph}{FU\_div}{20}{section*.7}%
+\contentsline {subparagraph}{FU\_jump}{22}{section*.8}%
+\contentsline {subparagraph}{FU\_mul}{23}{section*.9}%
+\contentsline {section}{\numberline {4}实验步骤与调试}{24}{section.4}%
+\contentsline {subsection}{\numberline {4.1}仿真}{24}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}综合}{24}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}实现}{24}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}验证设计}{24}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}生成二进制文件}{24}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}烧写上板}{25}{subsection.4.6}%
+\contentsline {section}{\numberline {5}实验结果与分析}{25}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Cache仿真结果分析}{25}{subsection.5.1}%
+\contentsline {subparagraph}{仿真代码设计}{25}{section*.10}%
+\contentsline {subparagraph}{仿真结果分析}{26}{section*.11}%
+\contentsline {subsection}{\numberline {5.2}上板结果分析}{32}{subsection.5.2}%
+\contentsline {section}{\numberline {6}讨论与心得}{32}{section.6}%

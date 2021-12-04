@@ -256,4 +256,28 @@ cache的addr和din/dout也被修改为对应值，从图中可以看到仿真结
     \label{Fig.15}
 \end{figure}
 
+S\_FILL之后会进入到S\_WAIT状态，如下图所示：
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{figs/res3.png}
+    \caption{res3}
+    \label{Fig.16}
+\end{figure}
+
+当脏块需要写回时，会进入S\_PRE\_BACK状态，如下图所示：
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{figs/res4.png}
+    \caption{res4}
+    \label{Fig.17}
+\end{figure}
+
+之后会进入S\_BACK状态，如下图所示：
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{figs/res5.png}
+    \caption{res5}
+    \label{Fig.18}
+\end{figure}
+
 后续的流程类似，均符合上部分仿真结果，具体流程会在验收时展示。

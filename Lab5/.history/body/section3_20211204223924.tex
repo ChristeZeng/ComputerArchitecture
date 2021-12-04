@@ -1,0 +1,572 @@
+%! TEX program = xelatex
+%! TEX root = ../root.tex
+
+\section{实验原理}
+\subsection{Datapath}
+为了支持多周期操作本实验对数据通路进行了修改，想要成功完成此次实验，对Datapath的熟练掌握自然是必要的。
+下面就是本次实验所参照的Datapath
+
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/DataPath.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{Datapath} %最终文档中希望显示的图片标题
+	\label{Fig.1} %用于文内引用的标签
+\end{figure}
+
+根据此图，我们就能够将数据通路部分完成，完成的RV32Core.v代码如下所示：
+\begin{lstlisting}[language = {verilog}]
+`timescale 1ns / 1ps
+
+module  RV32core(
+		input debug_en,  // debug enable
+		input debug_step,  // debug step clock
+		input [6:0] debug_addr,  // debug address
+		output[31:0] debug_data,  // debug data
+		input clk,  // main clock
+		input rst,  // synchronous reset
+		input interrupter  // interrupt source, for future use
+	);
+
+	wire debug_clk;
+	wire[31:0] debug_regs;
+	reg[31:0] Test_signal;
+	assign debug_data = debug_addr[5] ? Test_signal : debug_regs;
+
+	debug_clk clock(.clk(clk),.debug_en(debug_en),.debug_step(debug_step),.debug_clk(debug_clk));
+
+	wire reg_IF_EN, reg_ID_EN, reg_ID_flush, FU_ALU_EN, FU_mem_EN, FU_mul_EN, FU_div_EN, FU_jump_EN;
+	wire RegWrite_ctrl, ALUSrcA_ctrl, ALUSrcB_ctrl, mem_w_ctrl, branch_ctrl;
+	wire[2:0] ImmSel_ctrl, DatatoReg_ctrl;
+	wire[3:0] ALUControl_ctrl, Jump_ctrl;
+	wire[4:0] rd_ctrl;
+
+
+	wire [31:0] PC_IF, next_PC_IF, PC_4_IF, inst_IF;
+
+	wire valid_ID;
+	wire[31:0]inst_ID, PC_ID, Imm_out_ID, rs1_data_ID, rs2_data_ID, ALUA_ID, ALUB_ID;
+
+	wire FU_ALU_finish, FU_mem_finish, FU_mul_finish, FU_div_finish, FU_jump_finish, cmp_res_FU;
+	wire[31:0]ALUout_FU, mem_data_FU, mulres_FU, divres_FU, PC_jump_FU, PC_wb_FU;
+
+	wire[31:0]ALUout_WB, mem_data_WB, mulres_WB, divres_WB, PC_wb_WB, wt_data_WB;
+
+
+	// IF
+	REG32 REG_PC(.clk(debug_clk),.rst(rst),.CE(reg_IF_EN),.D(next_PC_IF),.Q(PC_IF));
+	
+	add_32 add_IF(.a(PC_IF),.b(32'd4),.c(PC_4_IF));
+
+	MUX2T1_32 mux_IF(.I0(PC_4_IF),.I1(PC_jump_FU),.s(branch_ctrl),.o(next_PC_IF));
+
+	ROM_D inst_rom(.a(PC_IF[8:2]),.spo(inst_IF));
+
+
+	//Issue
+	REG_ID reg_ID(.clk(debug_clk),.rst(rst),.EN(reg_ID_EN),
+		.flush(reg_ID_flush),.PCOUT(PC_IF),.IR(inst_IF),
+
+		.IR_ID(inst_ID),.PCurrent_ID(PC_ID),.valid(valid_ID));
+	
+	CtrlUnit ctrl(.clk(debug_clk),.rst(rst),.inst(inst_ID),.valid_ID(valid_ID),
+		.ALU_done(FU_ALU_finish),.MEM_done(FU_mem_finish),.MUL_done(FU_mul_finish),
+		.DIV_done(FU_div_finish),.JUMP_done(FU_jump_finish),.cmp_res_FU(cmp_res_FU),
+
+		.reg_IF_en(reg_IF_EN),.branch_ctrl(branch_ctrl),.reg_ID_en(reg_ID_EN),
+		.reg_ID_flush(reg_ID_flush),.ImmSel(ImmSel_ctrl),.ALU_en(FU_ALU_EN),
+		.MEM_en(FU_mem_EN),.MUL_en(FU_mul_EN),.DIV_en(FU_div_EN),.JUMP_en(FU_jump_EN),
+		.JUMP_op(Jump_ctrl),.ALU_op(ALUControl_ctrl),.MEM_we(mem_w_ctrl),
+		.ALUSrcA(ALUSrcA_ctrl),.ALUSrcB(ALUSrcB_ctrl),
+		.write_sel(DatatoReg_ctrl),.reg_write(RegWrite_ctrl),.rd_ctrl(rd_ctrl));
+
+	ImmGen imm_gen(.ImmSel(ImmSel_ctrl), .inst_field(inst_ID), .Imm_out(Imm_out_ID));            //to fill sth.in
+
+	Regs register(.clk(debug_clk),.rst(rst),
+		.R_addr_A(inst_ID[19:15]),.rdata_A(rs1_data_ID),
+		.R_addr_B(inst_ID[24:20]),.rdata_B(rs2_data_ID),
+		.L_S(RegWrite_ctrl),.Wt_addr(rd_ctrl),.Wt_data(wt_data_WB),
+		.Debug_addr(debug_addr[4:0]),.Debug_regs(debug_regs));
+
+	MUX2T1_32 mux_imm_ALU_ID_A(.I0(rs1_data_ID), .I1(PC_ID), .s(ALUSrcA_ctrl), .o(ALUA_ID));            //to fill sth.in
+
+	MUX2T1_32 mux_imm_ALU_ID_B(.I0(rs2_data_ID), .I1(PC_ID), .s(ALUSrcB_ctrl), .o(ALUB_ID));            //to fill sth.in
+
+
+	// FU
+	FU_ALU alu(.clk(debug_clk),.EN(FU_ALU_EN),.finish(FU_ALU_finish),
+		.ALUControl(ALUControl_ctrl),.ALUA(ALUA_ID),.ALUB(ALUB_ID),.res(ALUout_FU),
+		.zero(),.overflow());
+
+	FU_mem mem(.clk(debug_clk),.EN(FU_mem_EN),.finish(FU_mem_finish),
+		.mem_w(mem_w_ctrl),.bhw(inst_ID[14:12]),.rs1_data(rs1_data_ID),.rs2_data(rs2_data_ID),
+		.imm(Imm_out_ID),.mem_data(mem_data_FU));
+
+	FU_mul mu(.clk(debug_clk),.EN(FU_mul_EN),.finish(FU_mul_finish),
+		.A(rs1_data_ID),.B(rs2_data_ID),.res(mulres_FU));
+
+	FU_div du(.clk(debug_clk),.EN(FU_div_EN),.finish(FU_div_finish),
+		.A(rs1_data_ID),.B(rs2_data_ID),.res(divres_FU));
+
+	FU_jump ju(.clk(debug_clk),.EN(FU_jump_EN),.finish(FU_jump_finish),
+		.JALR(Jump_ctrl[3]),.cmp_ctrl(Jump_ctrl[2:0]),.rs1_data(rs1_data_ID),.rs2_data(rs2_data_ID),
+		.imm(Imm_out_ID),.PC(PC_ID),.PC_jump(PC_jump_FU),.PC_wb(PC_wb_FU),.cmp_res(cmp_res_FU));
+
+
+	// WB
+	REG32 reg_WB_ALU(.clk(debug_clk),.rst(rst),.CE(FU_ALU_finish),.D(ALUout_FU),.Q(ALUout_WB));
+
+	REG32 reg_WB_mem(.clk(debug_clk),.rst(rst),.CE(FU_mem_finish),.D(mem_data_FU),.Q(mem_data_WB));
+
+	REG32 reg_WB_mul(.clk(debug_clk),.rst(rst),.CE(FU_mul_finish),.D(mulres_FU),.Q(mulres_WB));
+
+	REG32 reg_WB_div(.clk(debug_clk),.rst(rst),.CE(FU_div_finish),.D(divres_FU),.Q(divres_WB));
+	
+	REG32 reg_WB_jump(.clk(debug_clk),.rst(rst),.CE(FU_jump_finish),.D(PC_wb_FU),.Q(PC_wb_WB));
+
+	MUX8T1_32 mux_DtR(.s(DatatoReg_ctrl), .I0(32'd0), .I1(ALUout_WB), .I2(mem_data_WB), .I3(mulres_WB),
+	.I4(divres_WB), .I5(PC_wb_WB), .I6(32'd0), .I7(32'd0), .o(wt_data_WB));  //to fill sth.in
+
+
+	always @* begin
+		case (debug_addr[4:0])
+			0:  Test_signal = PC_IF;
+			1:  Test_signal = inst_IF;
+			2:  Test_signal = PC_ID;  
+			3:  Test_signal = inst_ID;
+
+			4:  Test_signal = inst_ID[19:15];
+			5:  Test_signal = rs1_data_ID;
+			6:  Test_signal = inst_ID[24:20];
+			7:  Test_signal = rs2_data_ID;
+
+			8:  Test_signal = ImmSel_ctrl;
+			9:  Test_signal = Imm_out_ID;
+			10: Test_signal = ALUout_FU;
+			11: Test_signal = reg_IF_EN;
+
+			12: Test_signal = {15'b0, FU_ALU_EN, 15'b0, FU_ALU_finish};
+			13: Test_signal = ALUControl_ctrl;
+			14: Test_signal = ALUA_ID;
+			15: Test_signal = ALUB_ID;
+
+			16: Test_signal = {15'b0, FU_mem_EN, 15'b0, FU_mem_finish};
+			17: Test_signal = mem_w_ctrl;
+			18: Test_signal = inst_ID[14:12];
+			19: Test_signal = mem_data_FU;
+
+			20: Test_signal = {15'b0, FU_mul_EN, 15'b0, FU_mul_finish};
+			21: Test_signal = mulres_FU;
+			22: Test_signal = {15'b0, FU_div_EN, 15'b0, FU_div_finish};
+			23: Test_signal = divres_FU;
+
+			24: Test_signal = {15'b0, FU_jump_EN, 15'b0, FU_jump_finish};
+			25: Test_signal = Jump_ctrl;
+			26: Test_signal = PC_jump_FU;
+			27: Test_signal = PC_wb_FU;
+
+			28: Test_signal = RegWrite_ctrl;
+			29: Test_signal = rd_ctrl;
+			30: Test_signal = DatatoReg_ctrl;
+			31: Test_signal = wt_data_WB;
+			
+			default: Test_signal = 32'hAA55_AA55;
+		endcase
+	end
+
+endmodule
+\end{lstlisting}
+
+\subsection{Data Hazard}
+但流水线支持多周期操作后，势必会更改Data Hazard的情形和解决方式，为了解决这一问题，
+此实验中简单的使用了FU阶段的各操作的finish信号进行Data Hazard的resolve，只有当一条指令的FU阶段结束之后才允许
+进入WB阶段，当然仅仅只控制当前执行指令停顿是远远不够的，此次实验中还将FU的结束信号传入了Ctrl Unit中，作为Data Hazard的检测信号，
+当FU阶段未结束时，Ctrl Unit中的FU\_in\_use信号会升起，并且会使得后续指令同样等待FU阶段结束。\\
+具体例子如下所示：
+
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/DataHazard.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{DataHazard} %最终文档中希望显示的图片标题
+	\label{Fig.2} %用于文内引用的标签
+\end{figure}
+
+\subsection{Control Hazard}
+Ctrl Unit中不仅进行Data Hazard检测与解决，还实现了Control Unit的resolve操作，此部分的关键点就在于：在本次实验中
+有关跳转操作的地址计算与跳转条件判断均是在FU阶段计算完成的，结合FU阶段的计算结果和FU结束的信号，可以进行Control Hazard的解决。\\
+
+本实验还实现了Predict Not Taken策略，实现过程同样也是在Ctrl Unit中完成，默认认为跳转不会执行，在跳转指令进入FU阶段前正常取指与执行
+但FU阶段结束，跳转需要被执行时，通过Ctrl Unit中的reg\_ID\_flush信号升起，来flush掉ID段寄存器，并且将跳转到的指令取入IF段寄存器。
+
+总得来说，过程如下图所示：
+
+\begin{figure}[H] %H为当前位置，!htb为忽略美学标准，htbp为浮动图形
+	\centering %图片居中
+	\includegraphics[width=1.0\textwidth]{figs/Branch.png} %插入图片，[]中设置图片大小，{}中是图片文件名
+	\caption{Control Hazard} %最终文档中希望显示的图片标题
+	\label{Fig.3} %用于文内引用的标签
+\end{figure}
+
+根据上述设计思想，Ctrl Unit设计如下：
+\begin{lstlisting}[language=Verilog]
+`timescale 1ns / 1ps
+
+module CtrlUnit(
+	input clk,
+	input rst,
+
+	input[31:0] inst,
+	input valid_ID,
+	
+	input ALU_done,
+	input MEM_done,
+	input MUL_done,
+	input DIV_done,
+	input JUMP_done,
+	input cmp_res_FU,
+
+	// IF
+	output reg_IF_en, branch_ctrl,
+
+	// ID
+	output reg_ID_en, reg_ID_flush,
+	output[2:0] ImmSel,
+	output ALU_en, MEM_en, MUL_en, DIV_en, JUMP_en,
+	
+	// FU
+	output[3:0] JUMP_op,
+	output[3:0] ALU_op,
+	output ALUSrcA,
+	output ALUSrcB,
+	output MEM_we,
+	
+	// WB
+	output reg[2:0] write_sel,
+	output reg[4:0] rd_ctrl,
+	output reg reg_write
+);
+		// instruction field
+	wire[6:0] funct7 = inst[31:25];
+	wire[2:0] funct3 = inst[14:12];
+	wire[6:0] opcode = inst[6:0];
+	wire[4:0] rd = inst[11:7];
+	wire[4:0] rs1 = inst[19:15];
+	wire[4:0] rs2 = inst[24:20];
+
+	// type specification
+	wire Rop = opcode == 7'b0110011;
+	wire Iop = opcode == 7'b0010011;
+	wire Bop = opcode == 7'b1100011;
+	wire Lop = opcode == 7'b0000011;
+	wire Sop = opcode == 7'b0100011;
+
+	wire funct7_0  = funct7 == 7'h0;
+	wire funct7_1  = funct7 == 7'h1;
+	wire funct7_32 = funct7 == 7'h20;
+
+	wire funct3_0 = funct3 == 3'h0;
+	wire funct3_1 = funct3 == 3'h1;
+	wire funct3_2 = funct3 == 3'h2;
+	wire funct3_3 = funct3 == 3'h3;
+	wire funct3_4 = funct3 == 3'h4;
+	wire funct3_5 = funct3 == 3'h5;
+	wire funct3_6 = funct3 == 3'h6;
+	wire funct3_7 = funct3 == 3'h7;
+
+	wire ADD  = Rop & funct3_0 & funct7_0;
+	wire SUB  = Rop & funct3_0 & funct7_32;
+	wire SLL  = Rop & funct3_1 & funct7_0;
+	wire SLT  = Rop & funct3_2 & funct7_0;
+	wire SLTU = Rop & funct3_3 & funct7_0;
+	wire XOR  = Rop & funct3_4 & funct7_0;
+	wire SRL  = Rop & funct3_5 & funct7_0;
+	wire SRA  = Rop & funct3_5 & funct7_32;
+	wire OR   = Rop & funct3_6 & funct7_0;
+	wire AND  = Rop & funct3_7 & funct7_0;
+
+	wire MUL    = Rop & funct3_0 & funct7_1;
+	wire MULH   = Rop & funct3_1 & funct7_1;
+	wire MULHSU = Rop & funct3_2 & funct7_1;
+	wire MULHU  = Rop & funct3_3 & funct7_1;
+	wire DIV    = Rop & funct3_4 & funct7_1;
+	wire DIVU   = Rop & funct3_5 & funct7_1;
+	wire REM    = Rop & funct3_6 & funct7_1;
+	wire REMU    = Rop & funct3_7 & funct7_1;
+
+	wire ADDI  = Iop & funct3_0;	
+	wire SLTI  = Iop & funct3_2;
+	wire SLTIU = Iop & funct3_3;
+	wire XORI  = Iop & funct3_4;
+	wire ORI   = Iop & funct3_6;
+	wire ANDI  = Iop & funct3_7;
+	wire SLLI  = Iop & funct3_1 & funct7_0;
+	wire SRLI  = Iop & funct3_5 & funct7_0;
+	wire SRAI  = Iop & funct3_5 & funct7_32;
+
+	wire BEQ = Bop & funct3_0;
+	wire BNE = Bop & funct3_1;
+	wire BLT = Bop & funct3_4;
+	wire BGE = Bop & funct3_5;
+	wire BLTU = Bop & funct3_6;
+	wire BGEU = Bop & funct3_7;
+
+	wire LB =  Lop & funct3_0;
+	wire LH =  Lop & funct3_1;
+	wire LW =  Lop & funct3_2;
+	wire LBU = Lop & funct3_4;
+	wire LHU = Lop & funct3_5;
+
+	wire SB = Sop & funct3_0;
+	wire SH = Sop & funct3_1;
+	wire SW = Sop & funct3_2;
+
+	wire LUI   = opcode == 7'b0110111;
+	wire AUIPC = opcode == 7'b0010111;
+
+	wire JAL  =  opcode == 7'b1101111;
+	wire JALR = (opcode == 7'b1100111) && funct3_0;
+
+	wire R_valid = AND | OR | ADD | XOR | SLL | SRL | SRA | SUB | SLT | SLTU 
+		| MUL | MULH | MULHSU | MULHU | DIV | DIVU | REM | REMU;
+	wire I_valid = ANDI | ORI | ADDI | XORI | SLLI | SRLI | SRAI | SLTI | SLTIU;
+	wire B_valid = BEQ | BNE | BLT | BGE | BLTU | BGEU;
+	wire L_valid = LW | LH | LB | LHU | LBU;
+	wire S_valid = SW | SH | SB;
+
+	wire use_ALU = AND | OR | ADD | XOR | SLL | SRL | SRA | SUB | SLT | SLTU
+		| I_valid | LUI | AUIPC;
+	wire use_MEM = L_valid | S_valid;
+	wire use_MUL = MUL | MULH | MULHSU | MULHU;
+	wire use_DIV = DIV | DIVU | REM | REMU;
+	wire use_JUMP = B_valid | JAL | JALR;
+
+	wire[2:0] use_FU =  {3{use_ALU}}  & 3'd1 |
+						{3{use_MEM}}  & 3'd2 |
+						{3{use_MUL}}  & 3'd3 |
+						{3{use_DIV}}  & 3'd4 |
+						{3{use_JUMP}} & 3'd5 ;
+
+	reg FU_in_use, to_writeback, B_in_FU, J_in_FU;
+	initial begin
+		FU_in_use = 0;
+		to_writeback = 0;
+		B_in_FU = 0;
+		J_in_FU = 0;
+		write_sel = 0;
+		rd_ctrl = 0;
+		reg_write = 0;
+	end
+
+	always @(posedge clk or posedge rst) begin
+		if(rst) begin
+			FU_in_use <= 0;
+			reg_write <= 0;
+			B_in_FU <= 0;
+			J_in_FU <= 0;
+		end
+		else if(~FU_in_use) begin
+			reg_write <= 0;
+			if(valid_ID) begin
+				FU_in_use <= 1;
+				rd_ctrl <= inst[11:7];
+				write_sel <= use_FU;
+				to_writeback <= R_valid | I_valid | JAL | JALR | L_valid | LUI | AUIPC;
+				B_in_FU <= B_valid;
+				J_in_FU <= JAL | JALR;
+			end
+			else begin
+				B_in_FU <= 0;
+				J_in_FU <= 0;
+			end
+		end
+		else if(ALU_done | MEM_done | MUL_done | DIV_done | JUMP_done) begin
+			FU_in_use <= 0;
+			reg_write <= to_writeback;
+			B_in_FU <= 0;
+			J_in_FU <= 0;
+		end
+		else begin
+			reg_write <= 0;
+			B_in_FU <= 0;
+			J_in_FU <= 0;
+		end
+	end
+
+
+	assign reg_IF_en = ~FU_in_use | branch_ctrl;
+
+	assign reg_ID_en = reg_IF_en;
+
+	assign branch_ctrl = (B_in_FU & cmp_res_FU) |  J_in_FU;
+
+	assign reg_ID_flush = branch_ctrl;
+
+	localparam Imm_type_I = 3'b001;
+	localparam Imm_type_B = 3'b010;
+	localparam Imm_type_J = 3'b011;
+	localparam Imm_type_S = 3'b100;
+	localparam Imm_type_U = 3'b101;
+	assign ImmSel = {3{JALR | L_valid | I_valid}} & Imm_type_I |
+					{3{B_valid}}                  & Imm_type_B |
+					{3{JAL}}                      & Imm_type_J |
+					{3{S_valid}}                  & Imm_type_S |
+					{3{LUI | AUIPC}}              & Imm_type_U ;
+	
+	assign ALU_en = reg_IF_en & use_ALU & valid_ID;
+	assign MEM_en = reg_IF_en & use_MEM & valid_ID;
+	assign MUL_en = reg_IF_en & use_MUL & valid_ID;
+	assign DIV_en = reg_IF_en & use_DIV & valid_ID;
+	assign JUMP_en = reg_IF_en & use_JUMP & valid_ID;
+
+	localparam JUMP_BEQ  = 4'b0_001;
+	localparam JUMP_BNE  = 4'b0_010;
+	localparam JUMP_BLT  = 4'b0_011;
+	localparam JUMP_BGE  = 4'b0_100;
+	localparam JUMP_BLTU = 4'b0_101;
+	localparam JUMP_BGEU = 4'b0_110;
+	localparam JUMP_JAL  = 4'b0_000;
+	localparam JUMP_JALR = 4'b1_000;
+	assign JUMP_op ={4{BEQ}}  & JUMP_BEQ  |
+					{4{BNE}}  & JUMP_BNE  |
+					{4{BLT}}  & JUMP_BLT  |
+					{4{BGE}}  & JUMP_BGE  |
+					{4{BLTU}} & JUMP_BLTU |
+					{4{BGEU}} & JUMP_BGEU |
+					{4{JAL}}  & JUMP_JAL  |
+					{4{JALR}} & JUMP_JALR ;
+	
+	localparam ALU_ADD  = 4'b0001;
+	localparam ALU_SUB  = 4'b0010;
+	localparam ALU_AND  = 4'b0011;
+	localparam ALU_OR   = 4'b0100;
+	localparam ALU_XOR  = 4'b0101;
+	localparam ALU_SLL  = 4'b0110;
+	localparam ALU_SRL  = 4'b0111;
+	localparam ALU_SLT  = 4'b1000;
+	localparam ALU_SLTU = 4'b1001;
+	localparam ALU_SRA  = 4'b1010;
+	localparam ALU_Ap4  = 4'b1011;
+	localparam ALU_Bout = 4'b1100;
+	assign ALU_op = {4{ADD | ADDI | AUIPC}} & ALU_ADD  |
+					{4{SUB}}                & ALU_SUB  |
+					{4{AND | ANDI}}         & ALU_AND  |
+					{4{OR | ORI}}           & ALU_OR   |
+					{4{XOR | XORI}}         & ALU_XOR  |
+					{4{SLL | SLLI}}         & ALU_SLL  |
+					{4{SRL | SRLI}}         & ALU_SRL  |
+					{4{SLT | SLTI}}         & ALU_SLT  |
+					{4{SLTU | SLTIU}}       & ALU_SLTU |
+					{4{SRA | SRAI}}         & ALU_SRA  |
+					{4{LUI}}                & ALU_Bout ;
+
+	assign ALUSrcA = AUIPC;
+
+	assign ALUSrcB = I_valid | LUI | AUIPC;
+
+	assign MEM_we = S_valid;
+endmodule
+\end{lstlisting}
+
+\subsection{FU阶段}
+\subparagraph{FU\_ALU} FU\_ALU执行的是ALU操作，由两个时钟周期完成，基本操作与ALU操作相同，但通过state和一系列reg寄存器来控制结束周期。具体设计如下：
+
+\begin{lstlisting}[language = {verilog}]
+`timescale 1ns / 1ps
+
+module FU_ALU(
+	input clk, EN,
+	input[3:0] ALUControl,
+	input[31:0] ALUA, ALUB,
+	output[31:0] res,
+	output zero, overflow,
+	output finish
+);
+
+	reg state;
+	assign finish = state == 1'b1;
+	initial begin
+		state = 0;
+	end
+
+	reg[3:0] Control;
+	reg[31:0] A, B;
+
+	always@(posedge clk) begin
+		if(EN & ~state) begin // state == 0
+			A <= ALUA;
+			B <= ALUB;
+			Control <= ALUControl;
+			//...to fill sth.in
+			state <= 1;
+		end
+		else state <= 0;
+	end
+	
+	localparam ALU_ADD  = 4'b0001;
+	localparam ALU_SUB  = 4'b0010;
+	localparam ALU_AND  = 4'b0011;
+	localparam ALU_OR   = 4'b0100;
+	localparam ALU_XOR  = 4'b0101;
+	localparam ALU_SLL  = 4'b0110;
+	localparam ALU_SRL  = 4'b0111;
+	localparam ALU_SLT  = 4'b1000;
+	localparam ALU_SLTU = 4'b1001;
+	localparam ALU_SRA  = 4'b1010;
+	localparam ALU_Ap4  = 4'b1011;
+	localparam ALU_Bout = 4'b1100;
+
+	wire[4:0] shamt = B[4:0];
+	wire[32:0] res_subu = {1'b0,A} - {1'b0,B};
+
+	wire[31:0] res_ADD  = A + B;
+	wire[31:0] res_SUB  = A - B;
+	wire[31:0] res_AND  = A & B;
+	wire[31:0] res_OR   = A | B;
+	wire[31:0] res_XOR  = A ^ B;
+	wire[31:0] res_SLL  = A << shamt;
+	wire[31:0] res_SRL  = A >> shamt;
+
+	wire add_of = A[31] & B[31] & ~res_ADD[31] | // neg + neg = pos
+					~A[31] & ~B[31] & res_ADD[31]; // pos + pos = neg
+	wire sub_of = ~A[31] & B[31] & res_SUB[31] | // pos - neg = neg
+					A[31] & ~B[31] & ~res_SUB[31]; // neg - pos = pos
+	
+	wire[31:0] res_SLT  = {31'b0, res_SUB[31] ^ sub_of};
+	wire[31:0] res_SLTU = {31'b0, res_subu[32]};
+	wire[31:0] res_SRA  = {{32{A[31]}}, A} >> shamt;
+	wire[31:0] res_Ap4  = A + 4;
+	wire[31:0] res_Bout = B;
+
+	wire ADD  = Control == ALU_ADD ;
+	wire SUB  = Control == ALU_SUB ;
+	wire AND  = Control == ALU_AND ;
+	wire OR   = Control == ALU_OR  ;
+	wire XOR  = Control == ALU_XOR ;
+	wire SLL  = Control == ALU_SLL ;
+	wire SRL  = Control == ALU_SRL ;
+	wire SLT  = Control == ALU_SLT ;
+	wire SLTU = Control == ALU_SLTU;
+	wire SRA  = Control == ALU_SRA ;
+	wire Ap4  = Control == ALU_Ap4 ;
+	wire Bout = Control == ALU_Bout;
+
+	
+	assign zero = ~|res;
+	
+	assign overflow = (Control == ALU_ADD && add_of) | 
+					(Control == ALU_SUB && sub_of);
+	
+	assign res = {32{ADD }} & res_ADD  |
+					{32{SUB }} & res_SUB  |
+					{32{AND }} & res_AND  |
+					{32{OR  }} & res_OR   |
+					{32{XOR }} & res_XOR  |
+					{32{SLL }} & res_SLL  |
+					{32{SRL }} & res_SRL  |
+					{32{SLT }} & res_SLT  |
+					{32{SLTU}} & res_SLTU |
+					{32{SRA }} & res_SRA  |
+					{32{Ap4 }} & res_Ap4  |
+					{32{Bout}} & res_Bout ;
+
+endmodule
+\end{lstlisting}
