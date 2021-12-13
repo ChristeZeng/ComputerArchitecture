@@ -20,6 +20,6 @@
 \contentsline {section}{\numberline {5}实验结果与分析}{25}{section.5}%
 \contentsline {subsection}{\numberline {5.1}Cache仿真结果分析}{25}{subsection.5.1}%
 \contentsline {subparagraph}{仿真代码设计}{25}{section*.10}%
-\contentsline {subparagraph}{仿真结果分析}{26}{section*.11}%
+\contentsline {subparagraph}{仿真结果分析}{27}{section*.11}%
 \contentsline {subsection}{\numberline {5.2}上板结果分析}{32}{subsection.5.2}%
 \contentsline {section}{\numberline {6}讨论与心得}{32}{section.6}%
